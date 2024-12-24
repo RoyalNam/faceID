@@ -1,0 +1,10 @@
+torch
+numpy
+pillow
+torchvision
+scipy
+opencv-python
+onnxruntime
+PyQt6
+facenet-pytorch
+deep-sort-realtime
