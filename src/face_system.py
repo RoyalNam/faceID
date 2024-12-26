@@ -1,5 +1,4 @@
 import os
-import sys
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from scipy.spatial.distance import cosine
@@ -7,7 +6,6 @@ import logging
 import cv2
 import shutil
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.utils import (
     load_pickle,
     save_pickle,
@@ -28,6 +26,7 @@ class FaceSystem:
         embeddings_file,
         angles_file="data/saved_angles.json",
         image_dir="data/images",
+        use_logger=True,
     ):
         self.detector = detector
         self.recognizer = recognizer
@@ -39,10 +38,17 @@ class FaceSystem:
         self.saved_angles = self.load_saved_angles()
 
         self.executor = ThreadPoolExecutor(max_workers=4)
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(level=logging.INFO)
+        if use_logger:
+            self.logger = logging.getLogger(__name__)
+            logging.basicConfig(level=logging.INFO)
+        else:
+            self.logger = None
 
         self.update_all_stored_embeddings()
+
+    def _log(self, level, msg):
+        if self.logger:
+            self.logger.log(level, msg)
 
     def register_face(
         self, user_id, image_input, detect_faces=True, input_size=(352, 256)
@@ -53,8 +59,9 @@ class FaceSystem:
 
         images = self._load_images(image_input)
         if not images:
-            self.logger.warning(
-                f"No valid images provided for user {user_id}. Skipping."
+            self._log(
+                logging.WARNING,
+                f"No valid images provided for user {user_id}. Skipping.",
             )
             return
 
@@ -68,6 +75,59 @@ class FaceSystem:
 
         self.save_embeddings()
         self.update_all_stored_embeddings()
+
+    def _load_images(self, image_input):
+        """Load images based on input type."""
+        if isinstance(image_input, str):
+            if os.path.isdir(image_input):
+                return load_images_from_folder(image_input)
+            else:
+                self._log(
+                    logging.ERROR,
+                    f"Invalid directory: {image_input}. Skipping registration.",
+                )
+                return []
+        elif isinstance(image_input, list):
+            return image_input
+        else:
+            return [image_input]
+
+    def _process_registration(
+        self, image, user_id, cropped_faces_dir, next_idx, detect_faces, input_size
+    ):
+        """Process and register a single face."""
+        try:
+            if detect_faces:
+                bboxes, _ = self.detector.detect(
+                    image, input_size=input_size, max_num=1
+                )
+                if not bboxes:
+                    self._log(
+                        logging.WARNING,
+                        f"No face detected for user {user_id}. Skipping.",
+                    )
+                    return next_idx
+                face = self.get_face(image, bboxes[0])
+            else:
+                face = image
+
+            new_embedding = self.recognizer.get_embeddings([face])[0]
+            if not self.is_duplicate_embedding(new_embedding, user_id):
+                self.embeddings[user_id].append(new_embedding)
+                cropped_path = os.path.join(cropped_faces_dir, f"{next_idx}.jpg")
+                self.save_face(cropped_path, face)
+                next_idx += 1
+            else:
+                self._log(
+                    logging.INFO,
+                    f"Duplicate face detected for user {user_id}. Skipping.",
+                )
+        except Exception as e:
+            self._log(
+                logging.ERROR,
+                f"Error processing image for {user_id}: {e}",
+            )
+        return next_idx
 
     def register_from_video(self, video_path, user_id, tolerance=20, max_angle=100):
         """Process video frames and register faces."""
@@ -98,53 +158,6 @@ class FaceSystem:
 
         self._register_faces_from_video(cropped_faces_dir, user_id)
 
-    def _process_registration(
-        self, image, user_id, cropped_faces_dir, next_idx, detect_faces, input_size
-    ):
-        """Process and register a single face."""
-        try:
-            if detect_faces:
-                bboxes, _ = self.detector.detect(
-                    image, input_size=input_size, max_num=1
-                )
-                if not bboxes:
-                    self.logger.warning(
-                        f"No face detected for user {user_id}. Skipping."
-                    )
-                    return next_idx
-                face = self.get_face(image, bboxes[0])
-            else:
-                face = image
-
-            new_embedding = self.recognizer.get_embeddings([face])[0]
-            if not self.is_duplicate_embedding(new_embedding, user_id):
-                self.embeddings[user_id].append(new_embedding)
-                cropped_path = os.path.join(cropped_faces_dir, f"{next_idx}.jpg")
-                self.save_face(cropped_path, face)
-                next_idx += 1
-            else:
-                self.logger.info(
-                    f"Duplicate face detected for user {user_id}. Skipping."
-                )
-        except Exception as e:
-            self.logger.error(f"Error processing image for {user_id}: {e}")
-        return next_idx
-
-    def _load_images(self, image_input):
-        """Load images based on input type."""
-        if isinstance(image_input, str):
-            if os.path.isdir(image_input):
-                return load_images_from_folder(image_input)
-            else:
-                self.logger.error(
-                    f"Invalid directory: {image_input}. Skipping registration."
-                )
-                return []
-        elif isinstance(image_input, list):
-            return image_input
-        else:
-            return [image_input]
-
     def _extract_and_save_face(
         self,
         image,
@@ -158,20 +171,22 @@ class FaceSystem:
         """Extract faces from a video frame and save the cropped and raw images."""
         bboxes, kps = self.detector.detect(image, input_size=(352, 256), max_num=1)
         if len(bboxes) == 0:
-            self.logger.warning(f"No face detected for user {user_id}. Skipping.")
+            self._log(
+                logging.WARNING, f"No face detected for user {user_id}. Skipping."
+            )
             return next_idx
 
         face = self.get_face(image, bboxes[0])
 
         # Check if the face is valid (not blurry or too small)
         if not is_valid_face(face, laplacian_threshold=80):
-            # self.logger.warning(f"Invalid face detected. Skipping.")
+            # self._log(logging.WARNING,f"Invalid face detected. Skipping.")
             return next_idx
 
         # Get pose angles for the detected face
         roll, yaw, pitch = self.detector.find_pose(kps[0])
         if not self.is_angle_unique(roll, yaw, pitch, user_id, tolerance, max_angle):
-            # self.logger.info(f"Face skipped: roll={roll:.2f}, yaw={yaw:.2f}, pitch={pitch:.2f} exceeds limits.")
+            # self._log(                   logging.INFO,f"Face skipped: roll={roll:.2f}, yaw={yaw:.2f}, pitch={pitch:.2f} exceeds limits.")
             return next_idx
         self.saved_angles.setdefault(user_id, []).append((roll, yaw, pitch))
         # Save the cropped face image and raw frame image
@@ -187,18 +202,24 @@ class FaceSystem:
         """Register faces from the video if any were detected."""
         if os.path.exists(cropped_faces_dir) and os.listdir(cropped_faces_dir):
             self.register_face(user_id, cropped_faces_dir, detect_faces=False)
-            self.logger.info(f"Registered faces from video frames for user {user_id}.")
+            self._log(
+                logging.INFO, f"Registered faces from video frames for user {user_id}."
+            )
         else:
-            self.logger.warning(f"No faces registered for user {user_id} from video.")
+            self._log(
+                logging.WARNING, f"No faces registered for user {user_id} from video."
+            )
 
         # Clean up temporary folder
         if os.path.exists(cropped_faces_dir):
             shutil.rmtree(cropped_faces_dir)
-            self.logger.info(f"Temporary folder deleted: {cropped_faces_dir}")
+            self._log(logging.INFO, f"Temporary folder deleted: {cropped_faces_dir}")
 
-    def recognize_faces(self, image, method="cdist", threshold=0.8):
+    def recognize_faces(
+        self, image, method="cdist", threshold=0.8, input_size=(320, 256)
+    ):
         """Recognize multiple faces in an image without using a loop."""
-        bboxes, _ = self.detector.detect(image, input_size=(320, 256))
+        bboxes, _ = self.detector.detect(image, input_size=input_size)
         face_images = [self.get_face(image, bbox) for bbox in bboxes]
         if len(bboxes) == 0:
             return []
@@ -237,7 +258,7 @@ class FaceSystem:
                         idx = int(f.split(".")[0])
                         existing_idxs.append(idx)
                     except ValueError:
-                        self.logger.warning(f"Skipping invalid file name: {f}")
+                        self._log(logging.WARNING, f"Skipping invalid file name: {f}")
             return max(existing_idxs, default=0) + 1
         return 0
 
@@ -275,13 +296,14 @@ class FaceSystem:
             for folder in [user_image_dir, user_raw_image_dir, user_unknown_faces_dir]:
                 if os.path.exists(folder):
                     shutil.rmtree(folder)
-                    self.logger.info(f"Deleted folder: {folder}")
+                    self._log(logging.INFO, f"Deleted folder: {folder}")
 
-            self.logger.info(
-                f"User {name} and all associated data deleted successfully."
+            self._log(
+                logging.INFO,
+                f"User {name} and all associated data deleted successfully.",
             )
         else:
-            self.logger.info(f"User {name} not found.")
+            self._log(logging.INFO, f"User {name} not found.")
 
     def update_all_stored_embeddings(self):
         """Update all_stored_embeddings and all_names."""
@@ -298,7 +320,8 @@ class FaceSystem:
         else:
             self.all_stored_embeddings = np.empty((0, self.recognizer.output_size))
 
-    def is_angle_acceptable(self, roll, yaw, pitch, max_angle=100):
+    @staticmethod
+    def is_angle_acceptable(roll, yaw, pitch, max_angle=100):
         """Check if the face angles are within acceptable limits."""
         return (
             abs(roll) <= max_angle and abs(yaw) <= max_angle and abs(pitch) <= max_angle
