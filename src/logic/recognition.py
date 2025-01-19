@@ -7,10 +7,11 @@ from PyQt6.QtWidgets import QFileDialog, QWidget
 from src.ui import Ui_Recognition
 
 
-class LiveViewLogic:
-    def __init__(self, face_system, parent_widget: QWidget):
+class LiveViewLogic(QWidget):
+    def __init__(self, face_system, parent=None):
+        super().__init__(parent)
         self.ui_recognition = Ui_Recognition()
-        self.ui_recognition.setupUi(parent_widget)
+        self.ui_recognition.setupUi(self)
 
         self.face_system = face_system
         self.cap = None

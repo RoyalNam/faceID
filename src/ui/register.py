@@ -1,0 +1,80 @@
+from PyQt6 import QtCore, QtGui, QtWidgets
+
+
+class Ui_Register(object):
+    def setupUi(self, Register):
+        Register.setObjectName("Register")
+        Register.resize(640, 480)
+        self.layout = QtWidgets.QHBoxLayout(Register)
+        self.layout.setObjectName("layout")
+        self.left_layout = QtWidgets.QVBoxLayout()
+        self.left_layout.setObjectName("left_layout")
+        self.input_layout = QtWidgets.QHBoxLayout()
+        self.input_layout.setObjectName("input_layout")
+        self.input_username = QtWidgets.QLabel(parent=Register)
+        self.input_username.setObjectName("input_username")
+        self.input_layout.addWidget(self.input_username)
+        self.lbl_username = QtWidgets.QLineEdit(parent=Register)
+        self.lbl_username.setObjectName("lbl_username")
+        self.input_layout.addWidget(self.lbl_username)
+        self.left_layout.addLayout(self.input_layout)
+        self.feed_view = QtWidgets.QLabel(parent=Register)
+        self.feed_view.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.feed_view.setObjectName("feed_view")
+        self.left_layout.addWidget(self.feed_view)
+        self.btn_select_video = QtWidgets.QPushButton(parent=Register)
+        self.btn_select_video.setObjectName("btn_select_video")
+        self.left_layout.addWidget(self.btn_select_video)
+        self.btn_use_camera = QtWidgets.QPushButton(parent=Register)
+        self.btn_use_camera.setObjectName("btn_use_camera")
+        self.left_layout.addWidget(self.btn_use_camera)
+        self.btn_start = QtWidgets.QPushButton(parent=Register)
+        self.btn_start.setObjectName("btn_start")
+        self.left_layout.addWidget(self.btn_start)
+        self.btn_stop = QtWidgets.QPushButton(parent=Register)
+        self.btn_stop.setObjectName("btn_stop")
+        self.left_layout.addWidget(self.btn_stop)
+
+        self.btn_register = QtWidgets.QPushButton(parent=Register)
+        self.btn_register.setObjectName("btn_register")
+        self.left_layout.addWidget(self.btn_register)
+        self.left_layout.setStretch(1, 1)
+        self.layout.addLayout(self.left_layout)
+        self.right_layout = QtWidgets.QVBoxLayout()
+        self.right_layout.setObjectName("right_layout")
+        self.scroll_area_images = QtWidgets.QScrollArea(parent=Register)
+        self.scroll_area_images.setWidgetResizable(True)
+        self.scroll_area_images.setObjectName("scroll_area_images")
+        self.scrollAreaWidgetContents = QtWidgets.QWidget()
+        self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 150, 458))
+        self.scrollAreaWidgetContents.setObjectName("scrollAreaWidgetContents")
+        self.scroll_area_images.setWidget(self.scrollAreaWidgetContents)
+        self.right_layout.addWidget(self.scroll_area_images)
+        self.layout.addLayout(self.right_layout)
+        self.layout.setStretch(0, 3)
+        self.layout.setStretch(1, 1)
+
+        self.retranslateUi(Register)
+        QtCore.QMetaObject.connectSlotsByName(Register)
+
+    def retranslateUi(self, Register):
+        _translate = QtCore.QCoreApplication.translate
+        Register.setWindowTitle(_translate("Register", "Form"))
+        self.input_username.setText(_translate("Register", "Username:"))
+        self.feed_view.setText(_translate("Register", "Video will be displayed here"))
+        self.btn_select_video.setText(_translate("Recognition", "Select Video"))
+        self.btn_use_camera.setText(_translate("Recognition", "Use Camera"))
+        self.btn_start.setText(_translate("Recognition", "Start"))
+        self.btn_stop.setText(_translate("Recognition", "Stop"))
+        self.btn_register.setText(_translate("Register", "Register"))
+
+
+if __name__ == "__main__":
+    import sys
+
+    app = QtWidgets.QApplication(sys.argv)
+    Recognition = QtWidgets.QWidget()
+    ui = Ui_Register()
+    ui.setupUi(Recognition)
+    Recognition.show()
+    sys.exit(app.exec())
